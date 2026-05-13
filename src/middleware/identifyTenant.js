@@ -34,7 +34,9 @@ function identifyTenant(options = {}) {
             // Priority: explicit header > subdomain
             const explicitTenantId = req.headers['x-tenant-id']
                 || req.body?.tenantId
-                || req.query?.tenantId;
+                || req.body?.tenant_id
+                || req.query?.tenantId
+                || req.query?.tenant_id;
 
             let tenantConfig;
 
