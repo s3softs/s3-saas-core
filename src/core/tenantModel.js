@@ -16,14 +16,9 @@ module.exports = function createTenantModel(conn, name, schema) {
     if (!conn)   throw new Error(`[TENANT_MODEL] Connection missing for model: ${name}`);
     if (!schema) throw new Error(`[TENANT_MODEL] Schema missing for model: ${name}`);
 
-    // 🚀 [SaaS Optimization] Skip isolation plugin for DEDICATED/BYOD databases
-    // Since these databases are physically isolated, they don't need tenantId binding.
-    const dbType = conn.dbType;
-    if (dbType && dbType !== 'SHARED') {
-        return conn.models[name] || conn.model(name, schema);
-    }
-
-    // Apply tenantPlugin ONLY ONCE per schema (for SHARED databases)
+    // Apply tenantPlugin ONLY ONCE per schema
+    // This ensures tenantId/shopId fields are added for schema consistency (avoids Strict Mode errors)
+    // The plugin internally handles dbType checks to skip unnecessary filtering for Dedicated/BYOD.
     const isPluginApplied = schema.plugins?.some(p => p.fn === tenantPlugin);
     if (!isPluginApplied) {
         schema.plugin(tenantPlugin);
