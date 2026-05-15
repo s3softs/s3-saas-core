@@ -66,6 +66,16 @@ function identifyTenant(options = {}) {
             const rawFrontendUrl = tenantConfig.frontend_url || tenantConfig.frontendUrl;
             const resolvedFrontendUrl = normalizeUrl(rawFrontendUrl);
             
+            // 🔍 DEBUG LOGS
+            if (!resolvedFrontendUrl) {
+                console.warn(`[IDENTIFY] ⚠️ No frontend_url found for ${tenantConfig.tenantId}. DB Data:`, {
+                    _id: tenantConfig._id,
+                    subdomain: tenantConfig.subdomain,
+                    has_underscore: !!tenantConfig.frontend_url,
+                    has_camel: !!tenantConfig.frontendUrl
+                });
+            }
+
             if (process.env.SAAS_SHADOW_MODE === 'true') {
                 console.log(`🔍 [SHADOW_MODE] Tenant: ${tenantConfig.tenantId} | Resolved Frontend: ${resolvedFrontendUrl} | Source: MasterDB`);
             }
