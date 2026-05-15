@@ -8,6 +8,11 @@ const mongoose = require('mongoose');
  * - NEVER used to store business data
  * - Connection is created ONCE at app startup
  */
+if (!process.env.MASTER_DB_URI) {
+    console.error('❌ [CRITICAL] MASTER_DB_URI is not defined in .env. SaaS Control Plane cannot start.');
+    process.exit(1);
+}
+
 const masterConnection = mongoose.createConnection(process.env.MASTER_DB_URI);
 
 masterConnection.on('connected', () => {

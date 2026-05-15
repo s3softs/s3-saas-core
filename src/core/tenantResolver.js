@@ -10,8 +10,8 @@ const TenantConfigReader = require('./TenantConfigReader');
  */
 const tenantCache = new Map();
 
-async function resolveTenant(subdomain) {
-    if (!subdomain) return null;
+async function resolveTenant(identifier) {
+    if (!identifier) return null;
 
     const projectCode = process.env.PROJECT_CODE;
     if (!projectCode) {
@@ -19,21 +19,31 @@ async function resolveTenant(subdomain) {
         return null;
     }
 
-    // Cache hit
-    if (tenantCache.has(subdomain)) {
-        return tenantCache.get(subdomain);
+    // 🧠 [PERFORMANCE] Cache hit (Key can be subdomain or tenantId)
+    if (tenantCache.has(identifier)) {
+        return tenantCache.get(identifier);
     }
 
-    // Query Master DB — filter by subdomain, status, and projectCode
+    // Query Master DB — filter by subdomain OR tenantId, status, and projectCode
     const tenantConfig = await TenantConfigReader.findOne({
-        subdomain,
+        $or: [
+            { subdomain: identifier },
+            { tenantId: identifier }
+        ],
         status: 'ACTIVE',
         projectCode: projectCode
     }).lean();
 
     if (tenantConfig) {
-        tenantCache.set(subdomain, tenantConfig);
-        setTimeout(() => tenantCache.delete(subdomain), 5 * 60 * 1000);
+        // Cache by BOTH keys to ensure future lookups are fast regardless of identifier used
+        tenantCache.set(tenantConfig.subdomain, tenantConfig);
+        tenantCache.set(tenantConfig.tenantId, tenantConfig);
+        
+        // 🕒 TTL: 5 minutes
+        setTimeout(() => {
+            tenantCache.delete(tenantConfig.subdomain);
+            tenantCache.delete(tenantConfig.tenantId);
+        }, 5 * 60 * 1000);
     }
 
     return tenantConfig;

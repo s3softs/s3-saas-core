@@ -2,6 +2,7 @@ const { resolveTenant } = require('../core/tenantResolver');
 const { getConnection } = require('../core/dbManager');
 const { runWithTenant } = require('../core/tenantContext');
 const TenantConfigReader = require('../core/TenantConfigReader');
+const { normalizeUrl } = require('../utils/urlHelper');
 
 /**
  * identifyTenant — SaaS pipeline orchestrator middleware
@@ -40,16 +41,8 @@ function identifyTenant(options = {}) {
 
             let tenantConfig;
 
-            if (explicitTenantId) {
-                tenantConfig = await TenantConfigReader.findOne({
-                    $or: [
-                        { tenantId: explicitTenantId },
-                        { subdomain: explicitTenantId }
-                    ],
-                    status: 'ACTIVE'
-                }).lean();
-            } else if (subdomain) {
-                tenantConfig = await resolveTenant(subdomain);
+            if (explicitTenantId || subdomain) {
+                tenantConfig = await resolveTenant(explicitTenantId || subdomain);
             }
 
             if (!tenantConfig) {
@@ -68,13 +61,34 @@ function identifyTenant(options = {}) {
                 return res.status(403).json({ message: 'Organization account is suspended' });
             }
 
+            // 🌐 [PHASE 6 SHADOW MODE]
+            // Verify tenant frontend_url resolution from Master DB
+            const rawFrontendUrl = tenantConfig.frontend_url || tenantConfig.frontendUrl;
+            const resolvedFrontendUrl = normalizeUrl(rawFrontendUrl);
+            
+            if (process.env.SAAS_SHADOW_MODE === 'true') {
+                console.log(`🔍 [SHADOW_MODE] Tenant: ${tenantConfig.tenantId} | Resolved Frontend: ${resolvedFrontendUrl} | Source: MasterDB`);
+            }
+
+            // 🚀 [PHASE 6 CUTOVER]
+            // If enforcement is ON, we ensure all downstream logic uses the Master DB URL
+            if (process.env.SAAS_ENFORCE_TENANT_URL === 'true') {
+                if (!resolvedFrontendUrl) {
+                    console.warn(`❌ [SAAS_ENFORCE] Tenant ${tenantConfig.tenantId} has no valid frontend_url in Master DB.`);
+                }
+            }
+
             // Get tenant DB connection
             const db = await getConnection(tenantConfig, options.modelsPath);
 
             // ── Attach to request ─────────────────────────────────────────
             req.shopId      = tenantConfig.tenantId;     // backward compat
             req.tenantId    = tenantConfig.tenantId;     // forward compat
-            req.shopConfig  = { ...tenantConfig, shopId: tenantConfig.tenantId };
+            req.shopConfig  = { 
+                ...tenantConfig, 
+                shopId: tenantConfig.tenantId,
+                frontendUrl: resolvedFrontendUrl // 🌐 Enforced standardized URL
+            };
             req.tenant      = req.shopConfig;            // alias for controllers
             req.db          = db;
             req.productType = tenantConfig.projectCode;

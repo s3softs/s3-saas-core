@@ -19,7 +19,21 @@ const globalErrorHandler = require('../middleware/globalErrorHandler');
  * 
  * @returns {{ app: Express, globalErrorHandler: Function }}
  */
-function createSaaSApp(options = {}) {
+function createSaaSApp(options) {
+    // 🛡️ [SAAS GUARD] Ensure mandatory configuration is provided
+    if (!options) {
+        throw new Error("❌ [S3-SAAS-CORE] Missing SaaS config initialization. 'options' is required.");
+    }
+
+    if (!options.corsOrigins) {
+        throw new Error("❌ [S3-SAAS-CORE] 'corsOrigins' is a REQUIRED configuration. Production backends must not use open CORS.");
+    }
+
+    // Fail-fast for critical project context
+    if (!process.env.PROJECT_CODE) {
+        throw new Error("❌ [S3-SAAS-CORE] CRITICAL: 'PROJECT_CODE' is not defined in .env. Engine cannot resolve tenants without project context.");
+    }
+
     const app = express();
 
     // ── Standard Middleware ─────────────────────────────────────────────────
@@ -28,19 +42,34 @@ function createSaaSApp(options = {}) {
     app.use(express.urlencoded({ limit: '50mb', extended: true }));
     app.use(morgan('dev'));
 
-    // CORS
-    const allowedOrigins = options.corsOrigins || [
-        'http://localhost:5173',
-        'http://localhost:3000',
-        'http://localhost:5000'
-    ];
+    // ── CORS Hardening ──────────────────────────────────────────────────────
+    // Normalize origins: split, trim, filter empty, and deduplicate
+    let allowedOrigins = [];
+    if (options.corsOrigins) {
+        if (Array.isArray(options.corsOrigins)) {
+            allowedOrigins = options.corsOrigins;
+        } else if (typeof options.corsOrigins === 'string') {
+            allowedOrigins = options.corsOrigins.split(',').map(o => o.trim()).filter(Boolean);
+        }
+    }
+    allowedOrigins = [...new Set(allowedOrigins)];
+
+    if (allowedOrigins.length === 0) {
+        throw new Error("❌ [S3-SAAS-CORE] 'corsOrigins' list is empty. Production backends must specify at least one origin.");
+    }
+
     app.use(cors({
         origin: function (origin, callback) {
             if (!origin) return callback(null, true);
-            const isSubdomain = origin.match(/^https?:\/\/[^.]+\.localhost(:\d+)?$/);
-            if (allowedOrigins.includes(origin) || isSubdomain) {
+            
+            // 🌐 [SAAS DOMAIN STRATEGY]
+            // Allow configured origins OR any .localhost subdomain (for dev)
+            const isLocalhostSubdomain = origin.match(/^https?:\/\/[^.]+\.localhost(:\d+)?$/);
+            
+            if (allowedOrigins.includes(origin) || isLocalhostSubdomain) {
                 callback(null, true);
             } else {
+                console.warn(`⚠️ [CORS] Blocked origin: ${origin}`);
                 callback(new Error('CORS not allowed for: ' + origin));
             }
         },
