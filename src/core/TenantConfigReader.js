@@ -26,6 +26,8 @@ const tenantConfigSchema = new mongoose.Schema({
     isSeeded:      { type: Boolean, default: false },
     isInitialized: { type: Boolean, default: false }, // SaaS hook trigger
     modules:       { type: [String], default: [] },
+    frontend_url:  { type: String },
+    frontendUrl:   { type: String }, // support both casings
     subscription: {
         isEnabled: Boolean,
         isExpired:  Boolean
