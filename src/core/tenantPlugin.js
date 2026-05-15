@@ -149,10 +149,6 @@ function tenantPlugin(schema) {
 
         // 🚀 OPTIMIZATION: Skip filter for Dedicated/BYOD (Total isolation already exists at DB level)
         if (dbType && dbType !== 'SHARED') {
-            // Still sync shopId for legacy indexes if present in query, but don't enforce tenantId filter
-            if (tenantId && schema.paths.shopId && process.env.S3_SAAS_ENFORCE_TENANT_ID !== 'false') {
-                this.where({ shopId: tenantId });
-            }
             return;
         }
 
