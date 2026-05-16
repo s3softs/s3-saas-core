@@ -52,8 +52,8 @@ function identifyTenant(options = {}) {
             // --- 🛡️ PROJECT_CODE FILTER (Option A) ---
             const currentProjectCode = process.env.PROJECT_CODE;
             if (currentProjectCode && tenantConfig.projectCode !== currentProjectCode) {
-                return res.status(403).json({ 
-                    message: `Tenant ${subdomain} belongs to ${tenantConfig.projectCode}, not ${currentProjectCode}` 
+                return res.status(403).json({
+                    message: `Tenant ${subdomain} belongs to ${tenantConfig.projectCode}, not ${currentProjectCode}`
                 });
             }
 
@@ -65,7 +65,7 @@ function identifyTenant(options = {}) {
             // Verify tenant frontend_url resolution from Master DB
             const rawFrontendUrl = tenantConfig.frontend_url || tenantConfig.frontendUrl;
             const resolvedFrontendUrl = normalizeUrl(rawFrontendUrl);
-            
+
             if (process.env.SAAS_SHADOW_MODE === 'true') {
                 console.log(`🔍 [SHADOW_MODE] Tenant: ${tenantConfig.tenantId} | Resolved Frontend: ${resolvedFrontendUrl} | Source: MasterDB`);
             }
@@ -82,17 +82,17 @@ function identifyTenant(options = {}) {
             const db = await getConnection(tenantConfig, options.modelsPath);
 
             // ── Attach to request ─────────────────────────────────────────
-            req.shopId      = tenantConfig.tenantId;     // backward compat
-            req.tenantId    = tenantConfig.tenantId;     // forward compat
-            req.shopConfig  = { 
-                ...tenantConfig, 
+            req.shopId = tenantConfig.tenantId;     // backward compat
+            req.tenantId = tenantConfig.tenantId;     // forward compat
+            req.shopConfig = {
+                ...tenantConfig,
                 shopId: tenantConfig.tenantId,
                 frontendUrl: resolvedFrontendUrl // 🌐 Enforced standardized URL
             };
-            req.tenant      = req.shopConfig;            // alias for controllers
-            req.db          = db;
+            req.tenant = req.shopConfig;            // alias for controllers
+            req.db = db;
             req.productType = tenantConfig.projectCode;
-            req.modules     = (tenantConfig.modules?.length > 0)
+            req.modules = (tenantConfig.modules?.length > 0)
                 ? tenantConfig.modules
                 : ['POS', 'INVENTORY', 'ACCOUNTING', 'PURCHASE', 'CRM', 'REPORTS', 'ADMIN'];
             req.financialYear = '2026-27'; // Default — can be overridden by route middleware if needed
@@ -117,10 +117,10 @@ function identifyTenant(options = {}) {
             // 🔒 WRAP ENTIRE REQUEST IN TENANT CONTEXT (Critical for AsyncLocalStorage isolation)
             // The context must persist through ALL downstream middleware and route handlers
             const { tenantStorage } = require('../core/tenantContext');
-            
-            tenantStorage.run({ 
-                tenantId: tenantConfig.tenantId, 
-                dbType: tenantConfig.dbType 
+
+            tenantStorage.run({
+                tenantId: tenantConfig.tenantId,
+                dbType: tenantConfig.dbType
             }, async () => {
                 try {
                     // ── THE HOOK PATTERN (Seeding with Atomic Lock) ─────────────────────────
@@ -136,7 +136,7 @@ function identifyTenant(options = {}) {
                         if (lockAcquired) {
                             try {
                                 await options.onTenantInit(req);
-                                
+
                                 // Clear cache so future requests see isInitialized: true
                                 const { clearTenantCache } = require('../core/tenantResolver');
                                 clearTenantCache(subdomain || tenantConfig.tenantId);
@@ -146,7 +146,7 @@ function identifyTenant(options = {}) {
                             }
                         }
                     }
-                    
+
                     // ✅ Call next() INSIDE the context — entire downstream chain inherits it
                     next();
                 } catch (err) {
