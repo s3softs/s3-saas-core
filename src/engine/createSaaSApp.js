@@ -60,13 +60,23 @@ function createSaaSApp(options) {
 
     app.use(cors({
         origin: function (origin, callback) {
+            // Allow requests with no origin (like mobile apps, curl, or server-to-server)
             if (!origin) return callback(null, true);
-            
-            // 🌐 [SAAS DOMAIN STRATEGY]
-            // Allow configured origins OR any .localhost subdomain (for dev)
+
+            const isAllowed = allowedOrigins.some(pattern => {
+                if (pattern.includes('*')) {
+                    // Convert wildcard pattern to Regex
+                    // e.g. https://*.s3softs.com -> /^https:\/\/.*\.s3softs\.com$/
+                    const regex = new RegExp('^' + pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\*/g, '.*') + '$');
+                    return regex.test(origin);
+                }
+                return pattern === origin;
+            });
+
+            // Fallback for .localhost subdomains (kept for backward compatibility)
             const isLocalhostSubdomain = origin.match(/^https?:\/\/[^.]+\.localhost(:\d+)?$/);
-            
-            if (allowedOrigins.includes(origin) || isLocalhostSubdomain) {
+
+            if (isAllowed || isLocalhostSubdomain) {
                 callback(null, true);
             } else {
                 console.warn(`⚠️ [CORS] Blocked origin: ${origin}`);
