@@ -57,8 +57,16 @@ function identifyTenant(options = {}) {
                 });
             }
 
-            if (tenantConfig.status === 'SUSPENDED' || tenantConfig.status === 'INACTIVE') {
-                return res.status(403).json({ message: 'Organization account is suspended' });
+            // --- 🛡️ MASTER DB TENANT ACCOUNT & SUBSCRIPTION GUARD ---
+            const verifyTenantAccess = require('../core/verifyTenantAccess');
+            let accessInfo;
+            try {
+                accessInfo = verifyTenantAccess(tenantConfig);
+            } catch (accessErr) {
+                return res.status(accessErr.statusCode || 403).json({
+                    message: accessErr.message,
+                    code: accessErr.code
+                });
             }
 
             // 🌐 [PHASE 6 SHADOW MODE]
@@ -84,6 +92,8 @@ function identifyTenant(options = {}) {
             // ── Attach to request ─────────────────────────────────────────
             req.shopId = tenantConfig.tenantId;     // backward compat
             req.tenantId = tenantConfig.tenantId;     // forward compat
+            req.tenantConfig = tenantConfig;        // Sanitized Master DB config
+            req.tenantAccess = accessInfo;          // Subscription & status access metrics
             req.shopConfig = {
                 ...tenantConfig,
                 shopId: tenantConfig.tenantId,

@@ -1,38 +1,52 @@
 const mongoose = require('mongoose');
 const masterConnection = require('./masterDb');
+const { TENANT_STATUS, SUB_STATUS, DB_TYPES, PLAN_CODES } = require('../constants/saasConstants');
 
 /**
- * TenantConfigReader — Read-only model for Master DB TenantConfig collection
+ * TenantConfigReader — Read-only Mongoose Model & DTO Projection for Master DB TenantConfig
  * 
- * Used by tenantResolver and identifyTenant to identify tenants.
- * NEVER used to store business data.
- * 
- * FIELD NOTES:
- *   tenantId     — primary tenant identifier
- *   projectCode  — links to Project master (e.g., 'med_pos', 'gym_pos')
- *   modules      — list of authorized features for this tenant
- *   isSeeded     — true after onboarding seeder has run
+ * Used by tenantResolver, identifyTenant, and products to read tenant & subscription status.
+ * Standardized to match Super Admin Control Plane v3.0 Master DB Schema.
  */
 const tenantConfigSchema = new mongoose.Schema({
     tenantId:      { type: String, index: true },
     subdomain:     { type: String, index: true },
-    tenantName:    { type: String },
-    projectCode:   { type: String, index: true },  // module loader uses this
-    productId:     { type: String },               // backward compat (old docs)
-    dbType:        { type: String },               // SHARED | DEDICATED | BYOD
-    dbName:        { type: String },
-    dbUri:         { type: String },
-    status:        { type: String },               // ACTIVE | INACTIVE | SUSPENDED
-    isSeeded:      { type: Boolean, default: false },
-    isInitialized: { type: Boolean, default: false }, // SaaS hook trigger
-    modules:       { type: [String], default: [] },
+    domain:        { type: String, default: 's3softs.com' },
     frontend_url:  { type: String },
     frontendUrl:   { type: String }, // support both casings
+    tenantName:    { type: String },
+    ownerEmail:    { type: String },
+    projectCode:   { type: String, index: true },
+    dbType:        { type: String, enum: Object.values(DB_TYPES) },
+    dbName:        { type: String },
+    dbUri:         { type: String },
+    status:        { type: String, enum: [...Object.values(TENANT_STATUS), 'INACTIVE'], default: TENANT_STATUS.ACTIVE },
+    isFreeTrialUsed: { type: Boolean, default: false },
+    isSeeded:      { type: Boolean, default: false },
+    isInitialized: { type: Boolean, default: false },
+    bootstrapStatus: { type: String, default: 'PENDING' },
+    bootstrapError:  { type: String, default: null },
+
+    // ── Full Subscription Matrix (Super Admin v3.0) ──────────────────────────
     subscription: {
-        isEnabled: Boolean,
-        isExpired:  Boolean
+        isEnabled:      { type: Boolean, default: true },
+        planCode:       { type: String, default: PLAN_CODES.FREE },
+        durationKey:    { type: String, default: '15_DAYS' },
+        durationMonths: { type: Number, default: 0.5 },
+        startDate:      { type: Date },
+        expiryDate:     { type: Date },
+        graceDays:      { type: Number, default: 7 },
+        subStatus:      { type: String, default: SUB_STATUS.ACTIVE, enum: Object.values(SUB_STATUS) },
+        features:       [{ type: String }],
+        limits: {
+            maxUsers:  { type: Number, default: 1 },
+            maxStores: { type: Number, default: 1 }
+        }
     },
-    // --- 🚀 EXTENDED SAAS CONFIG (Option A Reusability) ---
+
+    modules: { type: [String], default: [] },
+
+    // --- 🚀 EXTENDED SAAS CONFIG ---
     branding: {
         schoolName:     String,
         logo:           String,
@@ -68,13 +82,26 @@ const tenantConfigSchema = new mongoose.Schema({
         apiKey: String
     }
 }, {
-    collection: 'tenantconfigs',  // must match Master DB collection name
+    collection: 'tenantconfigs',
     toJSON:   { virtuals: true },
-    toObject: { virtuals: true }
+    toObject: { virtuals: true },
+    timestamps: true
 });
 
 // Virtual alias for backward compatibility
 tenantConfigSchema.virtual('shopId').get(function () { return this.tenantId; });
+
+/**
+ * DTO Projection: Strips out any master database cluster secrets or private credentials
+ * before returning config to product controllers / callers.
+ */
+tenantConfigSchema.methods.toSanitizedDTO = function () {
+    const obj = this.toObject ? this.toObject() : { ...this };
+    delete obj.__v;
+    delete obj.firebase?.privateKey;
+    delete obj.cloudinary?.apiSecret;
+    return obj;
+};
 
 const TenantConfigReader = masterConnection.model('TenantConfig', tenantConfigSchema);
 
