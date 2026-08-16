@@ -84,7 +84,7 @@ function createSaaSApp(options) {
             }
         },
         methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
-        allowedHeaders: ['Content-Type', 'Authorization', 'x-tenant-id', 'x-auth-token', 'academic-session'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'x-tenant-id', 'x-auth-token', 'academic-session', 'x-branch-id', 'branchid', 'branch-id'],
         credentials: true
     }));
 

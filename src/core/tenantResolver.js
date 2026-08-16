@@ -24,13 +24,12 @@ async function resolveTenant(identifier) {
         return tenantCache.get(identifier);
     }
 
-    // Query Master DB — filter by subdomain OR tenantId, status, and projectCode
+    // Query Master DB — filter by subdomain OR tenantId, and projectCode
     const tenantConfig = await TenantConfigReader.findOne({
         $or: [
             { subdomain: identifier },
             { tenantId: identifier }
         ],
-        status: 'ACTIVE',
         projectCode: projectCode
     }).lean();
 
